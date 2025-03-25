@@ -34,7 +34,6 @@ bool file_exists() {
 }
 
 /*===== CRUD functions =====*/
-
 /*Function to add product to inventory*/
 bool add_product(Product p) {
     /*Opening the file*/
@@ -44,10 +43,29 @@ bool add_product(Product p) {
         return false;
     }
 
+    // Addding transaction logging for adding a product
+    Transaction t = {
+        .timestamp = time(NULL),
+        .type = ADD,
+        .product_id = p.id,
+        .quantity_change = p.quantity,
+        .price_change = p.price,
+        .user = "system"
+    };
+    snprintf(t.description, 100, "Added new product: %s", p.name);
+    
+
     /*Writing product to file*/
     bool success = (fwrite(&p, sizeof(Product), 1, fptr) == 1);
     close_file(fptr);
-    return success;
+    
+    
+    /*Logging if write is successful*/
+    if (success) {
+        log_transaction(t);
+        return success;
+    }
+    return false;
 }
 
 /*Function to search for search for specific product*/
@@ -86,13 +104,19 @@ bool update_product(int id, Product new_data) {
         return false;
     }
 
-    Product p;
+    Product old;
     bool found = false;
     long pos = 0;
+    Transaction t = {
+        .timestamp = time(NULL),
+        .type = UPDATE,
+        .product_id = id,
+        .user = "system"
+    };
 
     /*Searching for the product to update*/
-    while (fread(&p, sizeof(Product), 1, fptr)) {
-        if (p.id == id) {
+    while (fread(&old, sizeof(Product), 1, fptr)) {
+        if (old.id == id) {
             found = true;
             break;
         }
@@ -100,9 +124,22 @@ bool update_product(int id, Product new_data) {
     }
     /*Product found*/
     if (found) {
+
+        // Calculating changes
+        t.quantity_change = new_data.quantity - old.quantity;
+        t.price_change = new_data.price - old.price;
+        snprintf(t.description, 100, "Updated %s | Qty %d -> %d | Price $%.2f -> $%.2f",
+            old.name,
+            old.quantity, new_data.quantity,
+            old.price, new_data.price);
+
         fseek(fptr, pos - sizeof(Product), SEEK_SET);
         bool success = (fwrite(&new_data, sizeof(Product), 1, fptr) == 1);
         close_file(fptr);
+
+        if (success) {
+            log_transaction(t);
+        }
         return success;
     }
 
@@ -129,14 +166,23 @@ bool delete_product(int id) {
 
     Product p;
     bool deleted = false;
+    Transaction t = {
+        .timestamp = time(NULL),
+        .type = DELETE,
+        .product_id = id,
+        .user = "system"
+    };
 
     /*Deleting the product*/
     while (fread(&p, sizeof(Product), 1, src)) {
-        if (p.id != id) {
-            fwrite(&p, sizeof(Product), 1, dst);
+        if (p.id == id) {
+            /*Recording details before deletion*/
+            t.quantity_change = -p.quantity;
+            snprintf(t.description, 100, "Deleted product: %s", p.name);
+            deleted = true;
         }
         else {
-            deleted = true;
+            fwrite(&p, sizeof(Product), 1, dst);
         }
     }
 
@@ -145,6 +191,7 @@ bool delete_product(int id) {
 
     /*Checking if product is deleted*/
     if (deleted) {
+        log_transaction(t);
         remove(FILENAME);
         rename(TEMP_FILE, FILENAME);
         return true;
@@ -324,6 +371,16 @@ void restock_product(int id, int quantity) {
         return;
     }
 
+    Transaction t = {
+        .timestamp = time(NULL),
+        .type = RESTOCK,
+        .product_id = id,
+        .quantity_change = quantity,
+        .user = "system"
+    };
+    snprintf(t.description, 100, "Restocked %d units of %s",
+        quantity, product->name);
+
     /*Checking if quantity is valid*/
     if (quantity <= 0) {
         printf("Error: Invalid restock quantity!\n");
@@ -335,7 +392,9 @@ void restock_product(int id, int quantity) {
 
     /*Checking if product stock is updated*/
     if (update_product(id, *product)) {
-        printf("Restocked %d units. New quantity: %d\n", quantity,
+        log_transaction(t);
+        printf("Restock successfull!\n"
+            "Restocked %d units. New quantity: %d\n", quantity,
             product->quantity);
     }
     else {
@@ -355,6 +414,16 @@ void sell_product(int id, int quantity) {
         return;
     }
 
+    Transaction t = {
+        .timestamp = time(NULL),
+        .type = SALE,
+        .product_id = id,
+        .quantity_change = -quantity,
+        .user = "system"
+    };
+    snprintf(t.description, 100, "Sold %d units of %s",
+        quantity, product->name);
+
     /*Checking if product stock is still available*/
     if (quantity <= 0) {
         printf("Error: Invalid sale quantity!\n");
@@ -373,12 +442,66 @@ void sell_product(int id, int quantity) {
 
     /*Updating product stock when it is sold*/
     if (update_product(id, *product)) {
-        printf("Sold %d units. Remaining stock: %d\n", quantity,
+        log_transaction(t);
+        printf("Sale Successful!\n"
+            "Sold %d units. Remaining stock: %d\n", quantity,
             product->quantity);
     }
     else {
-        printf("Failed to update stock!\n");
+        printf("Sale Failed!\n");
     }
 
     free(product);
+}
+
+/*=== Logging ===*/
+/*Code for logging transactions*/
+void log_transaction(Transaction t) {
+    /*Opening file*/
+    FILE* fptr = fopen(LOG_FILE, "ab");
+    if (!fptr) {
+        printf("Transaction log error");
+    }
+    fwrite(&t, sizeof(Transaction), 1, fptr);
+    fclose(fptr);
+}
+
+/*Displaying transactions*/
+void display_transaction_log() {
+    /*Opening file*/
+    FILE* fptr = fopen(LOG_FILE, "rb");
+    if (!fptr) {
+        printf("\nNo transactions recorded\n");
+        return;
+    }
+
+    Transaction t;
+    char time_buf[20], price_buf[20];
+
+    // Displaying transaction log
+    printf("\n=== Transaction Log ===\n");
+    printf("%-19s | %-8s | %-6s | %-5s | %s\n",
+        "Timestamp", "Type", "Qty", "ID", "Description");
+
+    while (fread(&t, sizeof(Transaction), 1, fptr)) {
+        strftime(time_buf, 20, "%Y-%m-%d: %H:%M%S", localtime(&t.timestamp));
+
+        // Formatting price change
+        if (t.price_change != 0) {
+            snprintf(price_buf, 20, "$%.2f", t.price_change);
+        }
+        else {
+            strcpy(price_buf, "-");
+        }
+
+        printf("%-19s | %-8s | %+6d | %-5d | %s\n",
+            time_buf,
+            (const char* []) {
+            "ADD", "UPDATE", "DELETE", "RESTOCK", "SALE"
+        }[t.type],
+                t.quantity_change,
+                t.product_id,
+                t.description);
+    }
+    fclose(fptr);
 }

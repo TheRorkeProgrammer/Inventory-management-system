@@ -2,10 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/*Function prototypes*/
-void display_menu();
-void handle_menu_choice(int choice);
-int get_int_input(const char* prompt);
 
 /*Function to display menu*/
 void display_menu() {
@@ -18,7 +14,8 @@ void display_menu() {
     printf("6. Restock Product\n");
     printf("7. Sell Product\n");
     printf("8. Generate Report\n");
-    printf("9. Exit\n");
+    printf("9. View Transaction Log\n");
+    printf("10. Exit\n");
 }
 
 void handle_menu_choice(int choice) {
@@ -116,9 +113,13 @@ void handle_menu_choice(int choice) {
         generate_report();
         break;
 
-        // Exiting
+        // Viewing transaction log
     case 9:
-        printf("Closing Inventory System.....Exiting!\n");
+        display_transaction_log();
+        break;
+
+    case 10:
+        printf("Closing Inventory System.....Goodbye!\n");
         exit(EXIT_SUCCESS);
         system("PAUSE");
         break;
@@ -143,4 +144,11 @@ int get_int_input(const char* prompt) {
         }
         printf("Invalid input! Please enter a number.\n");
     }
+}
+
+/*UI helper function*/
+void print_header(const char* text) {
+    printf("\n=================================");
+    printf("\n%s", text);
+    printf("\n=================================");
 }
