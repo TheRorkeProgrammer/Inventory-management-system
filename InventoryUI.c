@@ -1,5 +1,5 @@
-#include "Inventory.h"
-#include "InventoryUI.h"
+#include "include/inventory.h"
+#include "include/InventoryUI.h"
 #include <stdio.h>
 #include <stdlib.h>
 
