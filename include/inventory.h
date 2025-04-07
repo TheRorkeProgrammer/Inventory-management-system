@@ -67,4 +67,5 @@ int generate_id();
 bool product_exists(int id);
 void input_product_data(Product* p);
 
+
 #endif // !INVENTORY_H

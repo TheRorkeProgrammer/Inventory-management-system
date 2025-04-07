@@ -1,4 +1,5 @@
 #include "include/inventory.h"
+#include "include/ui.h"
 #include <stdio.h>
 #include <stdlib.h>
 
