@@ -239,42 +239,30 @@ bool product_exists(int id) {
 
 /*Function to input product data*/
 void input_product_data(Product* p) {
-    char buffer[100];
-    int valid = 0;
+    char buffer[100]; // Buffer for numeric input
 
-    // Product name
     printf("Enter product name: ");
     fgets(p->name, MAX_NAME_LEN, stdin);
     p->name[strcspn(p->name, "\n")] = '\0';
 
-    // Product price with validation
-    do {
+    while (1) {
         printf("Enter price: ");
         fgets(buffer, sizeof(buffer), stdin);
-        valid = sscanf(buffer, "%f", &p->price);
-        if (valid != 1 || p->price <= 0) {
-            printf("Invalid price. Please enter a positive number.\n");
-            valid = 0;
-        }
-    } while (!valid);
+        if (sscanf(buffer, "%f", &p->price) == 1) break;
+        printf("Invalid input! Please enter a number.\n");
+    }
 
-    // Product quantity with validation
-    do {
+    while (1) {
         printf("Enter quantity: ");
         fgets(buffer, sizeof(buffer), stdin);
-        valid = sscanf(buffer, "%d", &p->quantity);
-        if (valid != 1 || p->quantity < 0) {
-            printf("Invalid quantity. Please enter a non-negative integer.\n");
-            valid = 0;
-        }
-    } while (!valid);
+        if (sscanf(buffer, "%d", &p->quantity) == 1) break;
+        printf("Invalid input! Please enter an integer.\n");
+    }
 
-    // Product category
     printf("Enter category: ");
     fgets(p->category, MAX_CATEGORY_LEN, stdin);
     p->category[strcspn(p->category, "\n")] = '\0';
 
-    // Generate ID (fixed function ensures uniqueness)
     p->id = generate_id();
 }
 
